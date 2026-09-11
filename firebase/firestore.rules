@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// ============================================================================
+// Firestore security rules — AC/Boiler Inventory Tracker
+// ----------------------------------------------------------------------------
+// No user accounts: access is gated by knowing the random workspace ID below,
+// which lives only inside the local inventory.html file. Anyone without that
+// exact ID cannot read or write anything (default deny).
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /workspaces/73f28a15895ea6c5d8eb9a0a70bcda9e/items/{itemId} {
+      allow read, write: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

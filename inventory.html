@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inventory — AC, Boilers &amp; Parts</title>
+<meta name="robots" content="noindex, nofollow" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          accent: { 50:"#eff6ff",100:"#dbeafe",300:"#93c5fd",400:"#60a5fa",500:"#3b82f6",600:"#2563eb" },
+          ok: { 400:"#34d399", 500:"#10b981" },
+          warn: { 400:"#fbbf24", 500:"#f59e0b" },
+          bad: { 400:"#f87171", 500:"#ef4444" },
+        },
+        fontFamily: { sans: ["Inter","ui-sans-serif","system-ui","sans-serif"] },
+      },
+    },
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+<style>
+  body { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+  .fade-in { animation: fadeIn .18s ease-out; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(4px);} to { opacity:1; transform: translateY(0);} }
+  .th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+  .th-sort:hover { color: #93c5fd; }
+  [data-modal] { backdrop-filter: blur(4px); }
+</style>
+</head>
+<body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
+
+<!-- ============================== TOASTS ============================== -->
+<div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2"></div>
+
+<!-- ============================== TOP BAR ============================== -->
+<header class="sticky top-0 z-30 border-b border-neutral-900 bg-neutral-950/90 backdrop-blur">
+  <div class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-3 px-4 py-3 md:px-8">
+    <div class="flex items-center gap-2.5">
+      <div class="grid h-9 w-9 place-items-center rounded-xl bg-accent-500/15 text-accent-400">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8 14 12.7l-3-3L7 14"/></svg>
+      </div>
+      <div>
+        <h1 class="text-sm font-bold leading-tight sm:text-base">Inventory Tracker</h1>
+        <p class="text-[11px] text-neutral-500">AC units &middot; Boilers &middot; Parts &middot; Electrical</p>
+      </div>
+    </div>
+
+    <div class="relative ml-0 min-w-[220px] flex-1 sm:ml-4">
+      <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search-input" type="text" placeholder="Search by name, SKU, brand, supplier..." class="w-full rounded-full border border-neutral-800 bg-neutral-900 py-2.5 pl-9 pr-4 text-sm outline-none placeholder:text-neutral-500 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+    </div>
+
+    <div class="flex items-center gap-2">
+      <span id="conn-badge" class="hidden items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-[11px] font-medium text-neutral-400 sm:flex">
+        <span id="conn-dot" class="h-1.5 w-1.5 rounded-full bg-neutral-600"></span>
+        <span id="conn-text">Connecting…</span>
+      </span>
+      <button id="export-btn" title="Export / Backup" class="grid h-9 w-9 place-items-center rounded-lg border border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      </button>
+      <button id="add-item-btn" class="flex items-center gap-1.5 rounded-full bg-accent-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent-600">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add Item
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-[1400px] px-4 py-6 md:px-8">
+
+  <!-- ============================== STATS ============================== -->
+  <section class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div class="rounded-2xl border border-neutral-900 bg-neutral-900/50 p-4">
+      <p class="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Products</p>
+      <p id="stat-count" class="mt-1 text-2xl font-bold">0</p>
+    </div>
+    <div class="rounded-2xl border border-neutral-900 bg-neutral-900/50 p-4">
+      <p class="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Units in Stock</p>
+      <p id="stat-units" class="mt-1 text-2xl font-bold">0</p>
+    </div>
+    <div class="rounded-2xl border border-neutral-900 bg-neutral-900/50 p-4">
+      <p class="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Stock Value (cost)</p>
+      <p id="stat-value" class="mt-1 text-2xl font-bold">$0</p>
+    </div>
+    <div class="rounded-2xl border border-neutral-900 bg-neutral-900/50 p-4">
+      <p class="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Potential Revenue</p>
+      <p id="stat-revenue" class="mt-1 text-2xl font-bold">$0</p>
+    </div>
+    <div class="rounded-2xl border border-bad-500/30 bg-bad-500/10 p-4">
+      <p class="text-[11px] font-medium uppercase tracking-wide text-bad-400">Low / Out of Stock</p>
+      <p id="stat-lowstock" class="mt-1 text-2xl font-bold text-bad-400">0</p>
+    </div>
+  </section>
+
+  <!-- ============================== INSIGHTS ============================== -->
+  <section class="mb-6 grid gap-3 lg:grid-cols-2">
+    <div class="rounded-2xl border border-neutral-900 bg-neutral-900/50 p-4">
+      <div class="mb-3 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-ok-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <h2 class="text-sm font-semibold">Top Sellers</h2>
+      </div>
+      <div id="top-sellers-list" class="space-y-2 text-sm"></div>
+    </div>
+    <div class="rounded-2xl border border-neutral-900 bg-neutral-900/50 p-4">
+      <div class="mb-3 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-warn-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <h2 class="text-sm font-semibold">Needs Restocking</h2>
+      </div>
+      <div id="low-stock-list" class="space-y-2 text-sm"></div>
+    </div>
+  </section>
+
+  <!-- ============================== FILTER BAR ============================== -->
+  <section class="mb-4 flex flex-wrap items-center gap-2">
+    <div id="category-chips" class="flex flex-wrap items-center gap-1.5"></div>
+    <div class="ml-auto flex flex-wrap items-center gap-2">
+      <select id="stock-filter" class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs outline-none focus:border-accent-500">
+        <option value="all">All stock levels</option>
+        <option value="in">In stock</option>
+        <option value="low">Low stock</option>
+        <option value="out">Out of stock</option>
+      </select>
+      <select id="sort-select" class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs outline-none focus:border-accent-500">
+        <option value="name-asc">Name (A–Z)</option>
+        <option value="name-desc">Name (Z–A)</option>
+        <option value="stock-asc">Stock (low → high)</option>
+        <option value="stock-desc">Stock (high → low)</option>
+        <option value="sold-desc">Best sellers first</option>
+        <option value="price-asc">Sell price (low → high)</option>
+        <option value="price-desc">Sell price (high → low)</option>
+        <option value="updated-desc">Recently updated</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- ============================== TABLE ============================== -->
+  <section class="overflow-hidden rounded-2xl border border-neutral-900 bg-neutral-900/40">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[900px] text-left text-sm">
+        <thead>
+          <tr class="border-b border-neutral-900 text-[11px] uppercase tracking-wide text-neutral-500">
+            <th data-sort="name" class="th-sort px-4 py-3">Product</th>
+            <th data-sort="category" class="th-sort px-3 py-3">Category</th>
+            <th data-sort="stock" class="th-sort px-3 py-3">Stock</th>
+            <th data-sort="cost" class="th-sort px-3 py-3">Cost</th>
+            <th data-sort="price" class="th-sort px-3 py-3">Sell Price</th>
+            <th class="px-3 py-3">Margin</th>
+            <th data-sort="sold" class="th-sort px-3 py-3">Sold</th>
+            <th class="px-3 py-3">Supplier</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="items-tbody"></tbody>
+      </table>
+    </div>
+    <div id="empty-state" class="hidden flex-col items-center justify-center gap-2 py-16 text-center text-neutral-500">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 6.6 12 12l8.7-5.4M12 22V12"/></svg>
+      <p class="text-sm font-medium" id="empty-title">No products yet</p>
+      <p class="text-xs" id="empty-sub">Click "Add Item" to start tracking your inventory.</p>
+    </div>
+  </section>
+
+  <p class="mt-3 text-center text-[11px] text-neutral-600">Data syncs live to your private Firebase workspace and also works offline.</p>
+</main>
+
+<!-- ============================== ITEM MODAL ============================== -->
+<div id="item-modal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 px-4">
+  <div class="fade-in max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
+    <div class="mb-5 flex items-center justify-between">
+      <h2 id="item-modal-title" class="text-lg font-bold">Add Product</h2>
+      <button data-close-modal="item-modal" class="grid h-8 w-8 place-items-center rounded-lg text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="item-form" class="space-y-4">
+      <input type="hidden" id="item-id" />
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Product name *</label>
+          <input id="f-name" required type="text" placeholder="e.g. LG Dual Inverter 12000 BTU" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Category *</label>
+          <input id="f-category" required list="category-options" type="text" placeholder="e.g. Air Conditioners" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+          <datalist id="category-options"></datalist>
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Brand</label>
+          <input id="f-brand" type="text" placeholder="e.g. LG, Bosch, Vaillant" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-neutral-400">SKU / Model #</label>
+          <input id="f-sku" type="text" placeholder="e.g. AC-LG-12K" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Supplier</label>
+          <input id="f-supplier" type="text" placeholder="e.g. Local distributor" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Cost price *</label>
+          <input id="f-cost" required type="number" min="0" step="0.01" placeholder="0.00" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Sell price *</label>
+          <input id="f-price" required type="number" min="0" step="0.01" placeholder="0.00" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Current stock *</label>
+          <input id="f-stock" required type="number" min="0" step="1" placeholder="0" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Low stock alert at</label>
+          <input id="f-threshold" type="number" min="0" step="1" placeholder="3" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-xs font-medium text-neutral-400">Notes</label>
+          <textarea id="f-notes" rows="2" placeholder="Storage location, warranty info, etc." class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30"></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" data-close-modal="item-modal" class="rounded-full border border-neutral-700 px-5 py-2.5 text-sm hover:border-neutral-500">Cancel</button>
+        <button id="item-submit-btn" type="submit" class="rounded-full bg-accent-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent-600">Save Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================== QTY (SELL/RESTOCK) MODAL ============================== -->
+<div id="qty-modal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 px-4">
+  <div class="fade-in w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
+    <div class="mb-4 flex items-center justify-between">
+      <h2 id="qty-modal-title" class="text-lg font-bold">Record Sale</h2>
+      <button data-close-modal="qty-modal" class="grid h-8 w-8 place-items-center rounded-lg text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p id="qty-modal-product" class="mb-4 text-sm text-neutral-400"></p>
+    <form id="qty-form" class="space-y-4">
+      <div>
+        <label class="mb-1 block text-xs font-medium text-neutral-400">Quantity</label>
+        <input id="qty-input" type="number" min="1" step="1" value="1" class="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30" />
+      </div>
+      <p id="qty-error" class="hidden text-xs text-bad-400"></p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" data-close-modal="qty-modal" class="rounded-full border border-neutral-700 px-5 py-2.5 text-sm hover:border-neutral-500">Cancel</button>
+        <button id="qty-submit-btn" type="submit" class="rounded-full bg-accent-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent-600">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================== EXPORT / IMPORT MODAL ============================== -->
+<div id="export-modal" data-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 px-4">
+  <div class="fade-in w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
+    <div class="mb-4 flex items-center justify-between">
+      <h2 class="text-lg font-bold">Export &amp; Backup</h2>
+      <button data-close-modal="export-modal" class="grid h-8 w-8 place-items-center rounded-lg text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="space-y-3">
+      <button id="export-csv-btn" class="flex w-full items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-left text-sm hover:border-accent-500">
+        <span>Export as CSV<br><span class="text-xs text-neutral-500">Open in Excel / Google Sheets</span></span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button id="export-json-btn" class="flex w-full items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-left text-sm hover:border-accent-500">
+        <span>Export full backup (JSON)<br><span class="text-xs text-neutral-500">Everything, re-importable</span></span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <label class="flex w-full cursor-pointer items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-left text-sm hover:border-accent-500">
+        <span>Import backup (JSON)<br><span class="text-xs text-neutral-500">Adds items from a backup file</span></span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        <input id="import-json-input" type="file" accept="application/json" class="hidden" />
+      </label>
+      <p class="pt-1 text-center text-[11px] text-neutral-600">Workspace ID: <code id="workspace-id-display" class="text-neutral-500"></code></p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
+  onSnapshot, query, orderBy, serverTimestamp, increment,
+  enableIndexedDbPersistence,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ----------------------------------------------------------------------------
+// Firebase setup — dedicated project "ac-boiler-inventory".
+// No login screen: access is gated by this random workspace ID matching the
+// Firestore security rules (anyone without this exact ID is denied).
+// ----------------------------------------------------------------------------
+const firebaseConfig = {
+  apiKey: "AIzaSyCsjKKB6Z8_-66sDI9TJjxH7Qk56z3e9os",
+  authDomain: "ac-boiler-inventory.firebaseapp.com",
+  projectId: "ac-boiler-inventory",
+  storageBucket: "ac-boiler-inventory.firebasestorage.app",
+  messagingSenderId: "965545277871",
+  appId: "1:965545277871:web:a5e69b1b8b2a6697b5175a",
+};
+const WORKSPACE_ID = "73f28a15895ea6c5d8eb9a0a70bcda9e";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+try { await enableIndexedDbPersistence(db); } catch (e) { /* multiple tabs open, or unsupported browser — Firestore still works online */ }
+
+const itemsCol = collection(db, "workspaces", WORKSPACE_ID, "items");
+
+// ----------------------------------------------------------------------------
+// State
+// ----------------------------------------------------------------------------
+const DEFAULT_CATEGORIES = ["Air Conditioners", "Boilers", "Boiler Parts", "Electrical", "Other"];
+let items = [];
+let searchTerm = "";
+let categoryFilter = "all";
+let stockFilter = "all";
+let sortMode = "name-asc";
+let pendingQtyAction = null; // { type: 'sell'|'restock', item }
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const fmtMoney = (n) => "$" + (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtInt = (n) => (Number(n) || 0).toLocaleString();
+const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+// ----------------------------------------------------------------------------
+// Toasts
+// ----------------------------------------------------------------------------
+function showToast(message, type = "ok") {
+  const colors = { ok: "border-ok-500/40 text-ok-400", bad: "border-bad-500/40 text-bad-400", info: "border-accent-500/40 text-accent-400" };
+  const el = document.createElement("div");
+  el.className = `fade-in rounded-xl border bg-neutral-900 px-4 py-2.5 text-sm shadow-lg ${colors[type] || colors.ok}`;
+  el.textContent = message;
+  $("#toast-container").appendChild(el);
+  setTimeout(() => { el.style.opacity = "0"; el.style.transition = "opacity .25s"; setTimeout(() => el.remove(), 250); }, 2600);
+}
+
+// ----------------------------------------------------------------------------
+// Connection status
+// ----------------------------------------------------------------------------
+function setConnBadge(state) {
+  const dot = $("#conn-dot"), text = $("#conn-text");
+  if (state === "online") { dot.className = "h-1.5 w-1.5 rounded-full bg-ok-500"; text.textContent = "Synced"; }
+  else if (state === "offline") { dot.className = "h-1.5 w-1.5 rounded-full bg-warn-500"; text.textContent = "Offline — saving locally"; }
+  else { dot.className = "h-1.5 w-1.5 rounded-full bg-neutral-600"; text.textContent = "Connecting…"; }
+}
+window.addEventListener("online", () => setConnBadge("online"));
+window.addEventListener("offline", () => setConnBadge("offline"));
+
+// ----------------------------------------------------------------------------
+// Firestore live subscription
+// ----------------------------------------------------------------------------
+let firstLoad = true;
+onSnapshot(
+  query(itemsCol, orderBy("name")),
+  (snap) => {
+    items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    setConnBadge(navigator.onLine ? "online" : "offline");
+    renderCategoryChips();
+    render();
+    firstLoad = false;
+  },
+  (err) => {
+    console.error(err);
+    setConnBadge("offline");
+    if (firstLoad) showToast("Could not reach the cloud database — check your connection.", "bad");
+  }
+);
+
+// ----------------------------------------------------------------------------
+// Derived helpers
+// ----------------------------------------------------------------------------
+function stockStatus(it) {
+  const threshold = Number(it.lowStockThreshold ?? 3);
+  if (Number(it.stock) <= 0) return "out";
+  if (Number(it.stock) <= threshold) return "low";
+  return "in";
+}
+function allCategories() {
+  const set = new Set(DEFAULT_CATEGORIES);
+  items.forEach((it) => it.category && set.add(it.category));
+  return Array.from(set);
+}
+function getFilteredSorted() {
+  let list = items.slice();
+
+  if (searchTerm.trim()) {
+    const t = searchTerm.trim().toLowerCase();
+    list = list.filter((it) =>
+      [it.name, it.sku, it.brand, it.category, it.supplier].some((f) => (f || "").toLowerCase().includes(t))
+    );
+  }
+  if (categoryFilter !== "all") list = list.filter((it) => it.category === categoryFilter);
+  if (stockFilter !== "all") list = list.filter((it) => stockStatus(it) === stockFilter);
+
+  const cmp = {
+    "name-asc": (a, b) => (a.name || "").localeCompare(b.name || ""),
+    "name-desc": (a, b) => (b.name || "").localeCompare(a.name || ""),
+    "stock-asc": (a, b) => (a.stock || 0) - (b.stock || 0),
+    "stock-desc": (a, b) => (b.stock || 0) - (a.stock || 0),
+    "sold-desc": (a, b) => (b.unitsSold || 0) - (a.unitsSold || 0),
+    "sold-asc": (a, b) => (a.unitsSold || 0) - (b.unitsSold || 0),
+    "price-asc": (a, b) => (a.sellPrice || 0) - (b.sellPrice || 0),
+    "price-desc": (a, b) => (b.sellPrice || 0) - (a.sellPrice || 0),
+    "cost-asc": (a, b) => (a.costPrice || 0) - (b.costPrice || 0),
+    "cost-desc": (a, b) => (b.costPrice || 0) - (a.costPrice || 0),
+    "category-asc": (a, b) => (a.category || "").localeCompare(b.category || ""),
+    "category-desc": (a, b) => (b.category || "").localeCompare(a.category || ""),
+    "updated-desc": (a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0),
+  }[sortMode] || ((a, b) => (a.name || "").localeCompare(b.name || ""));
+  list.sort(cmp);
+  return list;
+}
+
+// ----------------------------------------------------------------------------
+// Rendering
+// ----------------------------------------------------------------------------
+function renderStats() {
+  const count = items.length;
+  const units = items.reduce((s, it) => s + (Number(it.stock) || 0), 0);
+  const value = items.reduce((s, it) => s + (Number(it.stock) || 0) * (Number(it.costPrice) || 0), 0);
+  const revenue = items.reduce((s, it) => s + (Number(it.stock) || 0) * (Number(it.sellPrice) || 0), 0);
+  const lowCount = items.filter((it) => stockStatus(it) !== "in").length;
+
+  $("#stat-count").textContent = fmtInt(count);
+  $("#stat-units").textContent = fmtInt(units);
+  $("#stat-value").textContent = fmtMoney(value);
+  $("#stat-revenue").textContent = fmtMoney(revenue);
+  $("#stat-lowstock").textContent = fmtInt(lowCount);
+}
+
+function renderInsights() {
+  const topSellers = items.filter((it) => (it.unitsSold || 0) > 0).sort((a, b) => (b.unitsSold || 0) - (a.unitsSold || 0)).slice(0, 5);
+  const topEl = $("#top-sellers-list");
+  topEl.innerHTML = topSellers.length ? "" : `<p class="text-xs text-neutral-600">No sales recorded yet. Use the "Sell" button on a product to track this.</p>`;
+  topSellers.forEach((it, i) => {
+    const row = document.createElement("div");
+    row.className = "flex items-center justify-between gap-2 rounded-lg bg-neutral-950/60 px-3 py-2";
+    row.innerHTML = `
+      <span class="flex min-w-0 items-center gap-2">
+        <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ok-500/15 text-[10px] font-bold text-ok-400">${i + 1}</span>
+        <span class="truncate">${escapeHtml(it.name)}</span>
+      </span>
+      <span class="shrink-0 text-xs font-semibold text-ok-400">${fmtInt(it.unitsSold)} sold</span>`;
+    topEl.appendChild(row);
+  });
+
+  const low = items.filter((it) => stockStatus(it) !== "in").sort((a, b) => (a.stock || 0) - (b.stock || 0)).slice(0, 5);
+  const lowEl = $("#low-stock-list");
+  lowEl.innerHTML = low.length ? "" : `<p class="text-xs text-neutral-600">Nothing low on stock right now. 🎉</p>`;
+  low.forEach((it) => {
+    const row = document.createElement("div");
+    row.className = "flex items-center justify-between gap-2 rounded-lg bg-neutral-950/60 px-3 py-2";
+    const badge = stockStatus(it) === "out" ? `<span class="text-bad-400">Out of stock</span>` : `<span class="text-warn-400">${fmtInt(it.stock)} left</span>`;
+    row.innerHTML = `<span class="truncate">${escapeHtml(it.name)}</span><span class="shrink-0 text-xs font-semibold">${badge}</span>`;
+    lowEl.appendChild(row);
+  });
+}
+
+function renderCategoryChips() {
+  const cats = allCategories();
+  const wrap = $("#category-chips");
+  const current = categoryFilter;
+  wrap.innerHTML = "";
+  const makeChip = (label, value) => {
+    const btn = document.createElement("button");
+    const active = current === value;
+    btn.className = `rounded-full border px-3 py-1.5 text-xs font-medium transition ${active ? "border-accent-500 bg-accent-500/15 text-accent-400" : "border-neutral-800 text-neutral-400 hover:border-neutral-600"}`;
+    btn.textContent = label;
+    btn.addEventListener("click", () => { categoryFilter = value; renderCategoryChips(); render(); });
+    return btn;
+  };
+  wrap.appendChild(makeChip("All", "all"));
+  cats.forEach((c) => wrap.appendChild(makeChip(c, c)));
+
+  const datalist = $("#category-options");
+  datalist.innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}"></option>`).join("");
+}
+
+function renderTable() {
+  const list = getFilteredSorted();
+  const tbody = $("#items-tbody");
+  tbody.innerHTML = "";
+  $("#empty-state").classList.toggle("hidden", list.length !== 0);
+  $("#empty-state").classList.toggle("flex", list.length === 0);
+
+  if (list.length === 0) {
+    $("#empty-title").textContent = items.length === 0 ? "No products yet" : "No products match your filters";
+    $("#empty-sub").textContent = items.length === 0 ? 'Click "Add Item" to start tracking your inventory.' : "Try clearing the search or filters.";
+    return;
+  }
+
+  list.forEach((it) => {
+    const status = stockStatus(it);
+    const margin = it.sellPrice > 0 ? (((it.sellPrice - it.costPrice) / it.sellPrice) * 100) : 0;
+    const stockBadge = status === "out"
+      ? `<span class="rounded-full bg-bad-500/15 px-2 py-0.5 text-xs font-semibold text-bad-400">${fmtInt(it.stock)} · Out</span>`
+      : status === "low"
+      ? `<span class="rounded-full bg-warn-500/15 px-2 py-0.5 text-xs font-semibold text-warn-400">${fmtInt(it.stock)} · Low</span>`
+      : `<span class="rounded-full bg-ok-500/10 px-2 py-0.5 text-xs font-semibold text-ok-400">${fmtInt(it.stock)}</span>`;
+
+    const tr = document.createElement("tr");
+    tr.className = "fade-in border-b border-neutral-900/80 align-top hover:bg-neutral-900/40";
+    tr.innerHTML = `
+      <td class="px-4 py-3">
+        <p class="font-medium">${escapeHtml(it.name)}</p>
+        <p class="text-xs text-neutral-500">${escapeHtml(it.brand || "")}${it.brand && it.sku ? " · " : ""}${escapeHtml(it.sku || "")}</p>
+      </td>
+      <td class="px-3 py-3"><span class="rounded-full border border-neutral-800 px-2 py-0.5 text-xs text-neutral-400">${escapeHtml(it.category || "—")}</span></td>
+      <td class="px-3 py-3">${stockBadge}</td>
+      <td class="px-3 py-3 text-neutral-300">${fmtMoney(it.costPrice)}</td>
+      <td class="px-3 py-3 text-neutral-300">${fmtMoney(it.sellPrice)}</td>
+      <td class="px-3 py-3 text-neutral-400">${margin.toFixed(0)}%</td>
+      <td class="px-3 py-3 text-neutral-300">${fmtInt(it.unitsSold || 0)}</td>
+      <td class="px-3 py-3 text-neutral-500">${escapeHtml(it.supplier || "—")}</td>
+      <td class="px-4 py-3">
+        <div class="flex items-center justify-end gap-1">
+          <button data-action="sell" data-id="${it.id}" title="Record sale" class="grid h-8 w-8 place-items-center rounded-lg text-ok-400 hover:bg-ok-500/10" ${status === "out" ? "disabled" : ""}>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg>
+          </button>
+          <button data-action="restock" data-id="${it.id}" title="Restock" class="grid h-8 w-8 place-items-center rounded-lg text-accent-400 hover:bg-accent-500/10">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button data-action="edit" data-id="${it.id}" title="Edit" class="grid h-8 w-8 place-items-center rounded-lg text-neutral-400 hover:bg-neutral-800">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          </button>
+          <button data-action="delete" data-id="${it.id}" title="Delete" class="grid h-8 w-8 place-items-center rounded-lg text-neutral-400 hover:bg-bad-500/10 hover:text-bad-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+          </button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function render() {
+  renderStats();
+  renderInsights();
+  renderTable();
+}
+
+// ----------------------------------------------------------------------------
+// Modal helpers
+// ----------------------------------------------------------------------------
+function openModal(id) { const el = $("#" + id); el.classList.remove("hidden"); el.classList.add("flex"); }
+function closeModal(id) { const el = $("#" + id); el.classList.add("hidden"); el.classList.remove("flex"); }
+$$("[data-close-modal]").forEach((btn) => btn.addEventListener("click", () => closeModal(btn.dataset.closeModal)));
+$$("[data-modal]").forEach((backdrop) => backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeModal(backdrop.id); }));
+
+// ----------------------------------------------------------------------------
+// Add / Edit item
+// ----------------------------------------------------------------------------
+$("#add-item-btn").addEventListener("click", () => {
+  $("#item-form").reset();
+  $("#item-id").value = "";
+  $("#item-modal-title").textContent = "Add Product";
+  $("#item-submit-btn").textContent = "Save Product";
+  $("#f-threshold").value = 3;
+  openModal("item-modal");
+});
+
+function openEdit(id) {
+  const it = items.find((i) => i.id === id);
+  if (!it) return;
+  $("#item-id").value = it.id;
+  $("#f-name").value = it.name || "";
+  $("#f-category").value = it.category || "";
+  $("#f-brand").value = it.brand || "";
+  $("#f-sku").value = it.sku || "";
+  $("#f-supplier").value = it.supplier || "";
+  $("#f-cost").value = it.costPrice ?? "";
+  $("#f-price").value = it.sellPrice ?? "";
+  $("#f-stock").value = it.stock ?? 0;
+  $("#f-threshold").value = it.lowStockThreshold ?? 3;
+  $("#f-notes").value = it.notes || "";
+  $("#item-modal-title").textContent = "Edit Product";
+  $("#item-submit-btn").textContent = "Save Changes";
+  openModal("item-modal");
+}
+
+$("#item-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = $("#item-id").value;
+  const payload = {
+    name: $("#f-name").value.trim(),
+    category: $("#f-category").value.trim() || "Other",
+    brand: $("#f-brand").value.trim(),
+    sku: $("#f-sku").value.trim(),
+    supplier: $("#f-supplier").value.trim(),
+    costPrice: Number($("#f-cost").value) || 0,
+    sellPrice: Number($("#f-price").value) || 0,
+    stock: Math.max(0, Math.round(Number($("#f-stock").value) || 0)),
+    lowStockThreshold: Math.max(0, Math.round(Number($("#f-threshold").value) || 0)),
+    notes: $("#f-notes").value.trim(),
+    updatedAt: serverTimestamp(),
+  };
+  const btn = $("#item-submit-btn");
+  btn.disabled = true;
+  try {
+    if (id) {
+      await updateDoc(doc(itemsCol, id), payload);
+      showToast("Product updated.", "ok");
+    } else {
+      await addDoc(itemsCol, { ...payload, unitsSold: 0, createdAt: serverTimestamp() });
+      showToast("Product added.", "ok");
+    }
+    closeModal("item-modal");
+  } catch (err) {
+    console.error(err);
+    showToast("Could not save — check your connection.", "bad");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Delete
+// ----------------------------------------------------------------------------
+async function deleteItem(id) {
+  const it = items.find((i) => i.id === id);
+  if (!it) return;
+  if (!confirm(`Delete "${it.name}"? This cannot be undone.`)) return;
+  try {
+    await deleteDoc(doc(itemsCol, id));
+    showToast("Product deleted.", "info");
+  } catch (err) {
+    console.error(err);
+    showToast("Could not delete — check your connection.", "bad");
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Sell / Restock
+// ----------------------------------------------------------------------------
+function openQtyModal(type, id) {
+  const it = items.find((i) => i.id === id);
+  if (!it) return;
+  pendingQtyAction = { type, item: it };
+  $("#qty-modal-title").textContent = type === "sell" ? "Record Sale" : "Restock";
+  $("#qty-modal-product").textContent = it.name + (type === "sell" ? ` — currently ${it.stock} in stock` : "");
+  $("#qty-input").value = 1;
+  $("#qty-input").max = type === "sell" ? Math.max(1, it.stock) : "";
+  $("#qty-error").classList.add("hidden");
+  $("#qty-submit-btn").textContent = type === "sell" ? "Confirm Sale" : "Confirm Restock";
+  openModal("qty-modal");
+}
+
+$("#qty-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!pendingQtyAction) return;
+  const { type, item } = pendingQtyAction;
+  const qty = Math.round(Number($("#qty-input").value));
+  const errEl = $("#qty-error");
+
+  if (!qty || qty < 1) { errEl.textContent = "Enter a quantity of at least 1."; errEl.classList.remove("hidden"); return; }
+  if (type === "sell" && qty > item.stock) { errEl.textContent = `Only ${item.stock} in stock.`; errEl.classList.remove("hidden"); return; }
+  errEl.classList.add("hidden");
+
+  const ref = doc(itemsCol, item.id);
+  try {
+    if (type === "sell") {
+      await updateDoc(ref, { stock: increment(-qty), unitsSold: increment(qty), updatedAt: serverTimestamp() });
+      showToast(`Sold ${qty} × ${item.name}.`, "ok");
+    } else {
+      await updateDoc(ref, { stock: increment(qty), updatedAt: serverTimestamp() });
+      showToast(`Restocked ${qty} × ${item.name}.`, "ok");
+    }
+    closeModal("qty-modal");
+    pendingQtyAction = null;
+  } catch (err) {
+    console.error(err);
+    showToast("Could not save — check your connection.", "bad");
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Table action delegation
+// ----------------------------------------------------------------------------
+$("#items-tbody").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+  if (action === "edit") openEdit(id);
+  else if (action === "delete") deleteItem(id);
+  else if (action === "sell") openQtyModal("sell", id);
+  else if (action === "restock") openQtyModal("restock", id);
+});
+
+// ----------------------------------------------------------------------------
+// Search / filter / sort controls
+// ----------------------------------------------------------------------------
+let searchDebounce;
+$("#search-input").addEventListener("input", (e) => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => { searchTerm = e.target.value; renderTable(); }, 120);
+});
+$("#stock-filter").addEventListener("change", (e) => { stockFilter = e.target.value; renderTable(); });
+$("#sort-select").addEventListener("change", (e) => { sortMode = e.target.value; renderTable(); });
+
+const SORT_COLS = { name: "name", category: "category", stock: "stock", cost: "cost", price: "price", sold: "sold" };
+$$("[data-sort]").forEach((th) => {
+  th.addEventListener("click", () => {
+    const key = SORT_COLS[th.dataset.sort];
+    const [curKey, curDir] = sortMode.split("-");
+    sortMode = curKey === key && curDir === "asc" ? `${key}-desc` : `${key}-asc`;
+    const opt = document.querySelector(`#sort-select option[value="${sortMode}"]`);
+    $("#sort-select").value = opt ? sortMode : "";
+    renderTable();
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Export / Import
+// ----------------------------------------------------------------------------
+$("#export-btn").addEventListener("click", () => {
+  $("#workspace-id-display").textContent = WORKSPACE_ID;
+  openModal("export-modal");
+});
+
+function downloadFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+$("#export-csv-btn").addEventListener("click", () => {
+  const cols = ["name","category","brand","sku","supplier","costPrice","sellPrice","stock","lowStockThreshold","unitsSold","notes"];
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const rows = [cols.join(",")].concat(items.map((it) => cols.map((c) => esc(it[c])).join(",")));
+  downloadFile(`inventory-${new Date().toISOString().slice(0,10)}.csv`, rows.join("\n"), "text/csv");
+  showToast("CSV exported.", "ok");
+});
+
+$("#export-json-btn").addEventListener("click", () => {
+  downloadFile(`inventory-backup-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(items, null, 2), "application/json");
+  showToast("Backup exported.", "ok");
+});
+
+$("#import-json-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!Array.isArray(data)) throw new Error("Invalid backup file");
+    if (!confirm(`Import ${data.length} product(s) as new entries?`)) { e.target.value = ""; return; }
+    for (const it of data) {
+      const { id, ...rest } = it;
+      await addDoc(itemsCol, {
+        name: rest.name || "Untitled", category: rest.category || "Other", brand: rest.brand || "",
+        sku: rest.sku || "", supplier: rest.supplier || "", costPrice: Number(rest.costPrice) || 0,
+        sellPrice: Number(rest.sellPrice) || 0, stock: Math.max(0, Math.round(Number(rest.stock) || 0)),
+        lowStockThreshold: Math.max(0, Math.round(Number(rest.lowStockThreshold) || 3)),
+        unitsSold: Math.max(0, Math.round(Number(rest.unitsSold) || 0)), notes: rest.notes || "",
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+    }
+    showToast(`Imported ${data.length} product(s).`, "ok");
+    closeModal("export-modal");
+  } catch (err) {
+    console.error(err);
+    showToast("Import failed — file must be a valid backup JSON.", "bad");
+  } finally {
+    e.target.value = "";
+  }
+});
+
+setConnBadge(navigator.onLine ? "online" : "offline");
+</script>
+</body>
+</html>
